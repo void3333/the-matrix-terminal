@@ -35,7 +35,12 @@ internal static class Launcher
             };
             start.EnvironmentVariables["THE_MATRIX_LAUNCH_CWD"] = folder;
             start.EnvironmentVariables.Remove("WEZTERM_UNIX_SOCKET");
-            using (Process.Start(start)) { }
+            using (Process terminal = Process.Start(start))
+            {
+                if (terminal == null) throw new IOException("O WezTerm não iniciou.");
+                if (terminal.WaitForExit(1200) && terminal.ExitCode != 0)
+                    throw new IOException("O WezTerm encerrou ao abrir a pasta (código " + terminal.ExitCode + ").");
+            }
             return 0;
         }
         catch (Exception error)

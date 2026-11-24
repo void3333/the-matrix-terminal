@@ -2,6 +2,7 @@
     [Parameter(Mandatory)][string]$Project,
     [switch]$AutoStart,
     [switch]$HideProject,
+    [string]$GitPackage,
     [string]$TestRoot,
     [string]$TestCache
 )
@@ -19,15 +20,21 @@ $tarExe = Join-Path $env:WINDIR 'System32\tar.exe'
 $curlExe = Join-Path $env:WINDIR 'System32\curl.exe'
 $appKey = 'Software\Microsoft\Windows\CurrentVersion\App Paths\vibecode.exe'
 $launcher = Join-Path $app 'vibecode.exe'
+$legacyLauncher = Join-Path $env:USERPROFILE '.local\bin\vibecode.exe'
+$legacyHash = '9F23050F68A11E5F7F8E5BDDBE5E77309F744281929020E6311B25A30DB0B845'
+$marker = Join-Path $app 'matrix-setup.version'
+$setupVersion = '1.1.1'
 
 function Write-Step([int]$Percent, [string]$Message) {
     Write-Output "STEP ${Percent} $Message"
 }
 
-function Receive-Package([string]$Name, [string]$Url, [string]$Sha256) {
+function Receive-Package([string]$Name, [string]$Url, [string]$Sha256, [string]$LocalPackage) {
     $target = Join-Path $stage $Name
     if ($test -and $TestCache) {
         Copy-Item -LiteralPath (Join-Path $TestCache $Name) -Destination $target
+    } elseif ($LocalPackage) {
+        Copy-Item -LiteralPath $LocalPackage -Destination $target
     } else {
         & $curlExe --silent --show-error --fail --location --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 25 --max-time 600 --output $target $Url
         if ($LASTEXITCODE -ne 0) { throw "Falha ao baixar $Name. Verifique a rede e tente novamente." }
@@ -54,21 +61,25 @@ function Expand-Package([string]$Archive,[string]$Destination,[int]$Strip = 0) {
 }
 
 function Test-Programs([string]$Root) {
+    $gitRoot = Join-Path $Root 'Git'
+    $gitLocation = Join-Path $Root 'git-root.txt'
+    if (Test-Path -LiteralPath $gitLocation -PathType Leaf) {
+        $gitRoot = (Get-Content -LiteralPath $gitLocation -Encoding UTF8 -Raw).Trim()
+    }
     $executables = @(
         'WezTerm\wezterm.exe',
         'PowerShell\pwsh.exe',
         'oh-my-posh.exe',
-        'Git\cmd\git.exe',
-        'Git\usr\bin\bash.exe',
         'Agents\Codex\bin\codex.exe',
         'Agents\Claude\claude.exe'
     )
-    foreach ($relative in $executables) {
-        $exe = Join-Path $Root $relative
+    $programPaths = @($executables | ForEach-Object { Join-Path $Root $_ })
+    $programPaths += (Join-Path $gitRoot 'cmd\git.exe'), (Join-Path $gitRoot 'usr\bin\bash.exe')
+    foreach ($exe in $programPaths) {
         Get-Item -LiteralPath $exe | Out-Null
-        $flags = if ($relative -eq 'oh-my-posh.exe') { 'version' } else { '--version' }
+        $flags = if ((Split-Path -Leaf $exe) -eq 'oh-my-posh.exe') { 'version' } else { '--version' }
         $version = & $exe $flags
-        if ($LASTEXITCODE -ne 0) { throw "Falha ao testar $relative." }
+        if ($LASTEXITCODE -ne 0) { throw "Falha ao testar $exe." }
         Write-Output ('OK ' + ($version | Select-Object -First 1))
     }
     foreach ($relative in @('Agents\Codex\codex-resources\codex-command-runner.exe','Agents\Codex\codex-resources\codex-windows-sandbox-setup.exe')) {
@@ -82,9 +93,25 @@ function Test-Programs([string]$Root) {
     }
 }
 
+function Find-GitRoot {
+    $git = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (!$git -or (Split-Path -Leaf (Split-Path -Parent $git.Source)) -ne 'cmd') { return }
+    $root = Split-Path -Parent (Split-Path -Parent $git.Source)
+    if ($root -eq (Join-Path $app 'Git')) { return }
+    $bash = Join-Path $root 'usr\bin\bash.exe'
+    if (!(Test-Path -LiteralPath $bash -PathType Leaf)) { return }
+    & $git.Source --version | Out-Null
+    if ($LASTEXITCODE -ne 0) { return }
+    & $bash --version | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $root }
+}
+
 function Set-MatrixLink([string]$Path,[string]$Target,[string]$Folder,[string]$Arguments,[string]$Description) {
     if (Test-Path -LiteralPath $Path) {
-        if ($menuShell.CreateShortcut($Path).TargetPath -ne $Target) { throw "O atalho $Path pertence a outro aplicativo." }
+        $currentTarget = $menuShell.CreateShortcut($Path).TargetPath
+        if ($currentTarget -ne $Target -and !($knownLegacy -and $Target -eq $launcher -and $currentTarget -eq $legacyLauncher)) {
+            throw "O atalho $Path pertence a outro aplicativo."
+        }
     }
     $link = $menuShell.CreateShortcut($Path)
     $link.TargetPath = $Target
@@ -96,6 +123,20 @@ function Set-MatrixLink([string]$Path,[string]$Target,[string]$Folder,[string]$A
     $saved = $menuShell.CreateShortcut($Path)
     if ($saved.TargetPath -ne $Target -or $saved.WorkingDirectory -ne $Folder) {
         throw "Falha ao verificar o atalho $Path."
+    }
+}
+
+function Register-ExplorerMenu {
+    foreach ($folder in @(@('Directory','%1'), @('Directory\Background','%V'))) {
+        $verb = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\$($folder[0])\shell\TheMatrix")
+        try {
+            $verb.SetValue('', 'Abrir no The Matrix')
+            $verb.SetValue('Icon', $launcher)
+            $command = $verb.CreateSubKey('command')
+            try {
+                $command.SetValue('', ('"{0}" "{1}\."' -f $launcher, $folder[1]))
+            } finally { $command.Dispose() }
+        } finally { $verb.Dispose() }
     }
 }
 
@@ -111,21 +152,30 @@ try {
         throw 'Escolha uma pasta de projetos específica para ocultar.'
     }
     if (Test-Path -LiteralPath $Project -PathType Leaf) { throw 'O caminho escolhido é um arquivo. Escolha uma pasta.' }
+    $knownLegacy = !$test -and (Test-Path -LiteralPath $legacyLauncher -PathType Leaf) -and
+        (Get-FileHash -LiteralPath $legacyLauncher).Hash -eq $legacyHash
     if (!$test) {
         $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($appKey)
         if ($key) {
             try {
-                if ($key.GetValue('') -ne $launcher) { throw 'O comando vibecode já está registrado para outra instalação. Use este assistente em outro PC ou conta.' }
+                $registered = $key.GetValue('')
+                if ($registered -ne $launcher -and !($knownLegacy -and $registered -eq $legacyLauncher)) {
+                    throw 'O comando vibecode está registrado para outro aplicativo nesta conta.'
+                }
             } finally { $key.Dispose() }
         }
     }
-    if (Test-Path -LiteralPath $app) {
-        if (!(Test-Path -LiteralPath (Join-Path $app 'matrix-setup.version'))) {
-            throw 'Já existe uma instalação do The Matrix neste PC. Use este instalador no novo PC.'
-        }
+    $existingApp = Test-Path -LiteralPath $app
+    $installedVersion = if (Test-Path -LiteralPath $marker -PathType Leaf) { (Get-Content -LiteralPath $marker -Raw).Trim() }
+    $canUpgrade = $installedVersion -in @('1.0.0','1.0.1') -or ($knownLegacy -and (Test-Path -LiteralPath $launcher -PathType Leaf) -and
+        (Get-FileHash -LiteralPath $launcher).Hash -eq $legacyHash)
+    if ($existingApp -and $installedVersion -eq $setupVersion) {
         Write-Step 80 'Instalação encontrada. Verificando os componentes.'
         Test-Programs $app
     } else {
+        if ($existingApp -and !$canUpgrade) {
+            throw 'A pasta de instalação já existe. Confira se ela pertence a uma versão anterior do The Matrix.'
+        }
         New-Item -ItemType Directory -Path $stage -Force | Out-Null
         $bundle = Join-Path $stage 'bundle'
         Copy-Item -LiteralPath $payload -Destination $bundle -Recurse
@@ -142,15 +192,27 @@ try {
         $file = Receive-Package 'oh-my-posh.exe' 'https://github.com/JanDeDobbeleer/oh-my-posh/releases/download/v33.4.0/posh-windows-amd64.exe' 'c81371eb0b4863aef3d3e75fb59dc13a2e561267e226ce0f4cd382b28dbe7822'
         Move-Item -LiteralPath $file -Destination (Join-Path $bundle 'oh-my-posh.exe')
 
-        Write-Step 45 'Baixando e verificando Git e Git Bash'
-        $file = Receive-Package 'PortableGit.7z.exe' 'https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/PortableGit-2.56.1-64-bit.7z.exe' '9dd04a608ceb5f6ab32a73709e0ecb159d211da71b697c45ff81f6dd0c6b49c7'
-        $portableGit = Join-Path $stage 'PortableGit'
-        $extractor = Start-Process -FilePath $file -ArgumentList '-y', '-gm2' -WorkingDirectory $stage -WindowStyle Hidden -Wait -PassThru
-        if ($extractor.ExitCode -ne 0 -or !(Test-Path -LiteralPath $portableGit -PathType Container)) {
-            throw "Não foi possível extrair o Git portátil (código $($extractor.ExitCode))."
+        $systemGit = if (!$test -and !$GitPackage) { Find-GitRoot }
+        if ($systemGit) {
+            Write-Step 45 'Usando o Git e o Git Bash já instalados'
+            [IO.File]::WriteAllText((Join-Path $bundle 'git-root.txt'), $systemGit, $Utf8)
+        } elseif ($GitPackage -or ($test -and $TestCache)) {
+            Write-Step 45 'Verificando o pacote portátil do Git'
+            $file = Receive-Package 'git.tar.bz2' 'https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/Git-2.56.1-64-bit.tar.bz2' 'd7d89e69855f00e73d957b513c49538a420c465c84b9d212cf1add400eecdf54' $GitPackage
+            Write-Step 49 'Extraindo Git e Git Bash'
+            Expand-Package $file (Join-Path $bundle 'Git')
+        } else {
+            Write-Step 45 'Baixando o Git portátil'
+            $file = Receive-Package 'PortableGit.7z.exe' 'https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/PortableGit-2.56.1-64-bit.7z.exe' '9dd04a608ceb5f6ab32a73709e0ecb159d211da71b697c45ff81f6dd0c6b49c7'
+            Write-Step 49 'Extraindo Git e Git Bash'
+            $portableGit = Join-Path $stage 'PortableGit'
+            $extractor = Start-Process -FilePath $file -ArgumentList '-y', '-gm2' -WorkingDirectory $stage -WindowStyle Hidden -Wait -PassThru
+            if ($extractor.ExitCode -ne 0 -or !(Test-Path -LiteralPath $portableGit -PathType Container)) {
+                throw "Não foi possível extrair o Git portátil (código $($extractor.ExitCode))."
+            }
+            Move-Item -LiteralPath $portableGit -Destination (Join-Path $bundle 'Git')
+            Remove-Item -LiteralPath $file
         }
-        Move-Item -LiteralPath $portableGit -Destination (Join-Path $bundle 'Git')
-        Remove-Item -LiteralPath $file
 
         Write-Step 58 'Baixando e verificando Codex'
         $file = Receive-Package 'codex.tar.gz' 'https://github.com/openai/codex/releases/download/rust-v0.172.0/codex-package-x86_64-pc-windows-msvc.tar.gz' 'b723674d7caf26a3f55121a02d6cad8f3ac8ddf5860747a6edde1c904cf593af'
@@ -169,8 +231,18 @@ try {
 
         Write-Step 88 'Testando os terminais e o tema'
         Test-Programs $bundle
-        [IO.File]::WriteAllText((Join-Path $bundle 'matrix-setup.version'),'1.0.1',$Utf8)
-        [IO.Directory]::Move($bundle, $app)
+        [IO.File]::WriteAllText((Join-Path $bundle 'matrix-setup.version'),$setupVersion,$Utf8)
+        if ($existingApp) {
+            $backup = Join-Path $programs ('MatrixTerminal.backup-' + [Guid]::NewGuid().ToString('N'))
+            [IO.Directory]::Move($app, $backup)
+            try { [IO.Directory]::Move($bundle, $app) }
+            catch {
+                [IO.Directory]::Move($backup, $app)
+                throw
+            }
+        } else {
+            [IO.Directory]::Move($bundle, $app)
+        }
     }
 
     Write-Step 95 'Criando atalhos e pasta de trabalho'
@@ -202,6 +274,7 @@ try {
         $reg = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($appKey)
         try { $reg.SetValue('', $launcher, [Microsoft.Win32.RegistryValueKind]::String) }
         finally { $reg.Dispose() }
+        Register-ExplorerMenu
     }
     Write-Step 100 'Instalação concluída'
 } catch {

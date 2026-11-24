@@ -3,16 +3,22 @@
     [switch]$MatrixHelp
 )
 
+$matrixGit = Join-Path $PSScriptRoot 'Git'
+$gitLocation = Join-Path $PSScriptRoot 'git-root.txt'
+if (Test-Path -LiteralPath $gitLocation -PathType Leaf) {
+    $matrixGit = (Get-Content -LiteralPath $gitLocation -Encoding UTF8 -Raw).Trim()
+}
+
 $matrixTools = @(
     (Join-Path $PSScriptRoot 'Agents\Codex\bin'),
     (Join-Path $PSScriptRoot 'Agents\Codex\codex-path'),
     (Join-Path $PSScriptRoot 'Agents\Claude'),
-    (Join-Path $PSScriptRoot 'Git\cmd'),
+    (Join-Path $matrixGit 'cmd'),
     (Join-Path $env:APPDATA 'npm'),
     (Join-Path $env:USERPROFILE '.local\bin')
 ) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
 $env:Path = (@($matrixTools) + @($env:Path -split ';') | Select-Object -Unique) -join ';'
-$matrixBash = Join-Path $PSScriptRoot 'Git\usr\bin\bash.exe'
+$matrixBash = Join-Path $matrixGit 'usr\bin\bash.exe'
 if (!$env:CLAUDE_CODE_GIT_BASH_PATH -and (Test-Path -LiteralPath $matrixBash)) {
     $env:CLAUDE_CODE_GIT_BASH_PATH = $matrixBash
 }

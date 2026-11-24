@@ -10,17 +10,24 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("The Matrix Setup")]
 [assembly: AssemblyProduct("The Matrix")]
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyFileVersion("1.1.1.0")]
 
 internal static class Program
 {
     [STAThread]
     private static void Main()
     {
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new SetupWizard());
+        try
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new SetupWizard());
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(error.GetBaseException().Message, "The Matrix Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 }
 
@@ -48,9 +55,9 @@ internal sealed class SetupWizard : Form
     private bool fullScreen;
     private readonly string installRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\MatrixTerminal");
-    private string project = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "vibecode");
+    private string project = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     private bool startup = true;
-    private bool hidden = true;
+    private bool hidden;
     private bool busy;
     private CheckBox autoStart, hide;
     private Label agentStatusCodex;
@@ -241,7 +248,7 @@ internal sealed class SetupWizard : Form
     {
         ResetPage(1);
         busy = true;
-        Header("Instalando o The Matrix", "Cada pacote é baixado da fonte oficial e conferido antes da instalação.");
+        Header("Instalando o The Matrix", "O assistente verifica os componentes disponíveis e baixa os que faltam.");
         var stage = Mono("Preparando os arquivos…", Green, 11, 37, 153, 561, 32, false);
         var percent = Mono("0%", Green, 11, 606, 153, 52, 32, true);
         percent.TextAlign = ContentAlignment.TopRight;
@@ -306,11 +313,13 @@ internal sealed class SetupWizard : Form
                 payload.CopyTo(file);
             }
             ZipFile.ExtractToDirectory(archivePath, scratch);
+            string gitPackage = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "git.tar.bz2");
             var info = new ProcessStartInfo
             {
                 FileName = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
                 Arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "
                     + Quote(Path.Combine(scratch, "Install.ps1")) + " -Project " + Quote(project)
+                    + (File.Exists(gitPackage) ? " -GitPackage " + Quote(gitPackage) : "")
                     + (startup ? " -AutoStart" : "") + (hidden ? " -HideProject" : ""),
                 WorkingDirectory = scratch,
                 UseShellExecute = false,
@@ -385,7 +394,7 @@ internal sealed class SetupWizard : Form
         body.Controls.Add(claudeMode);
 
         body.Controls.Add(Mono("ABRIR A PARTIR DE QUALQUER PASTA", Green, 10, 37, 338, 617, 26, true));
-        body.Controls.Add(Caption("No Explorador, pressione Ctrl+L, digite vibecode e aperte Enter. Use Ctrl+Alt+H no terminal para ver a ajuda.", Muted, 10, 37, 368, 617, 54));
+        body.Controls.Add(Caption("No Explorador, use o menu de contexto Abrir no The Matrix ou digite vibecode.exe na barra de endereço. Use Ctrl+Alt+H para ver a ajuda.", Muted, 10, 37, 368, 617, 54));
         var open = MakeButton("Entrar na Matrix ›", 444, 456, 210, true);
         open.Click += delegate { LaunchTerminalAsync(); };
         body.Controls.Add(open);
@@ -414,7 +423,7 @@ internal sealed class SetupWizard : Form
             {
                 if (launcher == null) throw new IOException("Não foi possível abrir o terminal.");
                 sweep.Value = 82;
-                await Task.Delay(480);
+                await Task.Delay(1500);
                 if (launcher.HasExited && launcher.ExitCode != 0) throw new IOException("O terminal não conseguiu iniciar.");
             }
             sweep.Value = 100;

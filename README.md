@@ -12,7 +12,7 @@
   <a href="#compilar-o-instalador">Código e compilação</a>
 </p>
 
-**The Matrix** é um terminal para Windows que abre Codex e Claude Code lado a lado, em tela cheia, na pasta que você escolher. A tela tem fundo preto opaco, letras verdes e linhas de CRT. Digite `vibecode` na barra de endereço do Explorador para abrir a dupla na pasta atual.
+**The Matrix** é um terminal para Windows que abre Codex e Claude Code lado a lado, em tela cheia, na pasta que você escolher. A tela tem fundo preto opaco, letras verdes e linhas de CRT. No Explorador, use **Abrir no The Matrix** ou digite `vibecode.exe` na barra de endereço.
 
 ![The Matrix em modo de demonstração, com o Codex no painel esquerdo e o Claude no direito, ambos em C:\Projetos\vibecode](docs/images/terminal.png)
 
@@ -25,7 +25,7 @@
 3. O instalador baixa e verifica WezTerm, PowerShell 7, Git Bash, Oh My Posh, Codex e Claude Code. Na tela **Contas**, cada botão abre o fluxo de login do respectivo serviço.
 4. Clique em **Entrar na Matrix** para abrir os dois painéis na pasta selecionada.
 
-O instalador é executado na sua conta do Windows e não tem assinatura digital própria. A release inclui o arquivo `SHA256.txt` para conferir o download com `Get-FileHash .\The-Matrix-Setup-1.0.1.exe`.
+O instalador é executado na sua conta do Windows e não tem assinatura digital própria. A release inclui o arquivo `SHA256.txt` para conferir o download com `Get-FileHash .\The-Matrix-Setup-1.1.1.exe`.
 
 ![Assistente em tela cheia com chuva de código, seleção de pasta e opções para inicialização e pasta oculta](docs/images/instalador.png)
 
@@ -42,7 +42,8 @@ O login acontece no navegador. Você pode pular essa etapa e entrar depois pelo 
 
 | Atalho | O que faz |
 | --- | --- |
-| **Ctrl+L → `vibecode` → Enter** | Abre a dupla na pasta atual do Explorador. |
+| **Ctrl+L → `vibecode.exe` → Enter** | Abre a dupla na pasta atual do Explorador. |
+| **Botão direito → Abrir no The Matrix** | Abre a pasta selecionada ou a pasta atual. No Windows 11, procure em **Mostrar mais opções**. |
 | **Ctrl+Shift+O** | Escolhe outra pasta e abre a dupla em uma nova janela. |
 | **Ctrl+Alt+H** | Abre a ajuda numa aba PowerShell. |
 | **Ctrl+Shift+T** | Abre uma aba PowerShell. |
@@ -77,4 +78,4 @@ Em Windows x64, com o compilador C# do .NET Framework disponível, rode na raiz 
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\build.ps1
 ```
 
-O executável e o checksum saem em `dist\`. O [assistente](installer/Setup.cs), o [launcher](launcher/Vibecode.cs) e o [tema do terminal](terminal/matrix-theme.lua) ficam neste repositório. Os clientes são baixados dos fornecedores na instalação. Veja os [componentes de terceiros](THIRD-PARTY.md) para detalhes.
+O executável e o checksum saem em `dist\`. O [assistente](installer/Setup.cs), o [launcher](launcher/Vibecode.cs) e o [tema do terminal](terminal/matrix-theme.lua) ficam neste repositório. A versão 1.1.1 pode usar o Git for Windows já instalado. Para usar o pacote portátil, coloque o arquivo verificado pelo instalador com o nome `git.tar.bz2` na mesma pasta do executável. Os demais componentes são baixados dos fornecedores. Veja os [componentes de terceiros](THIRD-PARTY.md) para detalhes.
