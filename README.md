@@ -20,12 +20,12 @@
 
 ## Instalação
 
-1. Baixe o [The-Matrix-Setup-1.0.0.exe](https://github.com/void3333/the-matrix-terminal/releases/download/v1.0.0/The-Matrix-Setup-1.0.0.exe) e execute-o em um **Windows x64** com internet.
+1. Baixe o instalador na [release mais recente](https://github.com/void3333/the-matrix-terminal/releases/latest) e execute-o em um **Windows x64** com internet.
 2. Escolha a pasta de trabalho. O assistente também permite ocultá-la e abrir o terminal automaticamente ao entrar no Windows.
 3. O instalador baixa e verifica WezTerm, PowerShell 7, Git Bash, Oh My Posh, Codex e Claude Code. Na tela **Contas**, cada botão abre o fluxo de login do respectivo serviço.
 4. Clique em **Entrar na Matrix** para abrir os dois painéis na pasta selecionada.
 
-O instalador é executado na sua conta do Windows e não tem assinatura digital própria. A release inclui o arquivo `SHA256.txt` para conferir o download com `Get-FileHash .\The-Matrix-Setup-1.0.0.exe`.
+O instalador é executado na sua conta do Windows e não tem assinatura digital própria. A release inclui o arquivo `SHA256.txt` para conferir o download com `Get-FileHash .\The-Matrix-Setup-1.0.1.exe`.
 
 ![Assistente em tela cheia com chuva de código, seleção de pasta e opções para inicialização e pasta oculta](docs/images/instalador.png)
 

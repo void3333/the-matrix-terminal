@@ -143,8 +143,14 @@ try {
         Move-Item -LiteralPath $file -Destination (Join-Path $bundle 'oh-my-posh.exe')
 
         Write-Step 45 'Baixando e verificando Git e Git Bash'
-        $file = Receive-Package 'git.tar.bz2' 'https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/Git-2.56.1-64-bit.tar.bz2' 'd7d89e69855f00e73d957b513c49538a420c465c84b9d212cf1add400eecdf54'
-        Expand-Package $file (Join-Path $bundle 'Git')
+        $file = Receive-Package 'PortableGit.7z.exe' 'https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/PortableGit-2.56.1-64-bit.7z.exe' '9dd04a608ceb5f6ab32a73709e0ecb159d211da71b697c45ff81f6dd0c6b49c7'
+        $portableGit = Join-Path $stage 'PortableGit'
+        $extractor = Start-Process -FilePath $file -ArgumentList '-y', '-gm2' -WorkingDirectory $stage -WindowStyle Hidden -Wait -PassThru
+        if ($extractor.ExitCode -ne 0 -or !(Test-Path -LiteralPath $portableGit -PathType Container)) {
+            throw "Não foi possível extrair o Git portátil (código $($extractor.ExitCode))."
+        }
+        Move-Item -LiteralPath $portableGit -Destination (Join-Path $bundle 'Git')
+        Remove-Item -LiteralPath $file
 
         Write-Step 58 'Baixando e verificando Codex'
         $file = Receive-Package 'codex.tar.gz' 'https://github.com/openai/codex/releases/download/rust-v0.172.0/codex-package-x86_64-pc-windows-msvc.tar.gz' 'b723674d7caf26a3f55121a02d6cad8f3ac8ddf5860747a6edde1c904cf593af'
@@ -163,7 +169,7 @@ try {
 
         Write-Step 88 'Testando os terminais e o tema'
         Test-Programs $bundle
-        [IO.File]::WriteAllText((Join-Path $bundle 'matrix-setup.version'),'1.0.0',$Utf8)
+        [IO.File]::WriteAllText((Join-Path $bundle 'matrix-setup.version'),'1.0.1',$Utf8)
         [IO.Directory]::Move($bundle, $app)
     }
 

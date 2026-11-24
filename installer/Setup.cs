@@ -10,8 +10,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("The Matrix Setup")]
 [assembly: AssemblyProduct("The Matrix")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 
 internal static class Program
 {

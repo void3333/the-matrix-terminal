@@ -27,7 +27,7 @@ try {
     $manifest = Join-Path $root 'installer\setup.manifest'
     $setupSource = Join-Path $root 'installer\Setup.cs'
     $visualSource = Join-Path $root 'installer\Immersive.cs'
-    $output = Join-Path $OutputDirectory 'The-Matrix-Setup-1.0.0.exe'
+    $output = Join-Path $OutputDirectory 'The-Matrix-Setup-1.0.1.exe'
     & $csc /nologo /target:winexe /platform:x64 /optimize+ /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.IO.Compression.FileSystem.dll "/win32manifest:$manifest" "/win32icon:$assets\matrix.ico" "/resource:$assets\matrix-icon.png,Matrix.Icon.png" "/resource:$zipPath,Matrix.Payload.zip" "/out:$output" $setupSource $visualSource
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar o instalador.' }
     $hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
